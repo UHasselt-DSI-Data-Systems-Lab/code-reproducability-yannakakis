@@ -1,5 +1,5 @@
 # Reproducability Package - Yannakakis in Column Stores
-This repository contains supplemental material for reproducing the results reported our paper *Instance-Optimal Acyclic Join Processing Without Regret: Engineering the Yannakakis Algorithm in Column Stores*. Full version of the paper will be uploaded soon.
+This repository contains supplemental material for reproducing the results reported our paper *Instance-Optimal Acyclic Join Processing Without Regret: Engineering the Yannakakis Algorithm in Column Stores*. Full version of the paper can be found [here](./paper.pdf).
 
 The repository is organized as follows:
 
