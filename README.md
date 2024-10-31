@@ -1,5 +1,5 @@
 # Reproducability Package - Yannakakis in Column Stores
-This repository contains supplemental material for reproducing the results reported our paper *Instance-Optimal Acyclic Join Processing Without Regret: Engineering the Yannakakis Algorithm in Column Stores*. Full version will be uploaded soon.
+This repository contains supplemental material for reproducing the results reported our paper *Instance-Optimal Acyclic Join Processing Without Regret: Engineering the Yannakakis Algorithm in Column Stores*. Full version of the paper will be uploaded soon.
 
 The repository is organized as follows:
 
@@ -11,6 +11,13 @@ The repository is organized as follows:
 - [**intermediate_to_df_plan**](./intermediate_to_df_plan/): Rust code for running query plans (binary & 2NSA plans) in Datafusion.
 - [**query_plans**](./query_plans/): Binary and 2NSA query plans specified in JSON format for all benchmark queries.
 - [**yannakakis-join-implementation**](./yannakakis-join-implementation/): Yannakakis implementation in Datafusion. (dependency of [intermediate_to_df_plan](./intermediate_to_df_plan/))
+
+
+Do not forget to clone submodules well when cloning this repository. You can do this by adding the `--recursive` flag to the `git clone` command:
+
+```bash
+git clone --recursive <URL>
+```
 
 
 ## Analyze Results
@@ -31,10 +38,11 @@ We provided some bash script to make it easier to run the experiments: [setup.sh
 ```bash
 # cwd = root directory of this repository
 
+# Install required pip packages
+# (Create a new virtual environment if desired)
+pip install -r requirements.txt
+
 # Download datasets, build DuckDB, build Yannakakis implementation,...
-# This will install some pip packages in your current environment. 
-# If you want to avoid this, you can create a new environment 
-# and activate this before running the script.
 chmod +x setup.sh
 ./setup.sh
 
@@ -46,3 +54,5 @@ chmod +x clean.sh
 chmod +x run_queries.sh
 ./run_queries.sh
 ```
+
+You can now run, for each benchmark, the notebook `experiments/<benchmark>/analysis.ipynb` to analyze the results.
