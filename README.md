@@ -32,6 +32,9 @@ We provided some bash script to make it easier to run the experiments: [setup.sh
 # cwd = root directory of this repository
 
 # Download datasets, build DuckDB, build Yannakakis implementation,...
+# This will install some pip packages in your current environment. 
+# If you want to avoid this, you can create a new environment 
+# and activate this before running the script.
 chmod +x setup.sh
 ./setup.sh
 
