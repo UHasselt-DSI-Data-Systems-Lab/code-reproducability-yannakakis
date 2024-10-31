@@ -23,7 +23,7 @@ Be aware that results might differ from machine to machine. We conducted all exp
 
 - Rust (1.74.1) with nightly toolchain
 - Python (3.10.12) & pip (22.0.2)
-- Make (4.3)
+- Make (4.3) & Ninja (1.10.1)
 
 
 We provided some bash script to make it easier to run the experiments: [setup.sh](./setup.sh), [clean.sh](./clean.sh), and [run_queries.sh](./run_queries.sh). They should be executed from the root directory and also in the following order:
