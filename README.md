@@ -5,7 +5,7 @@ The repository is organized as follows:
 
 - [**2phase_nsa**](./2phase_nsa/): Code for converting binary plans to 2NSA plans.
 - [**benchmarks**](./benchmarks/): Benchmark queries and data.
-- [**duckdb**](./duckdb/): Fork of DuckDB.
+- [**duckdb**](https://github.com/LieseB-1746743/duckdb): Fork of DuckDB.
 - [**duckdb_scripts**](./duckdb_scripts/): Scripts for loading data and running queries in DuckDB.
 - [**experiments**](./experiments/): Experiment scripts and results.
 - [**intermediate_to_df_plan**](./intermediate_to_df_plan/): Rust code for running query plans (binary & 2NSA plans) in Datafusion.
@@ -15,9 +15,7 @@ The repository is organized as follows:
 
 ## Analyze Results
 
-If you only want to analyze our results reported in the paper, you can skip the following steps and inspect the results in the [experiments](./experiments/) folder. For the CE benchmark, the output folder was too large for GitHub, so we only uploaded the [compressed version](./experiments/ce/output.tar.xz). You should extract it (in the same folder) before running the analysis notebooks.
-
-```bash
+If you only want to analyze our results reported in the paper, you can inspect the results in the [experiments](./experiments/) folder. For the CE benchmark, the output folder was too large for GitHub, so we only uploaded a [compressed version](./experiments/ce/output.tar.xz). You should extract it (in the same folder) before running the analysis notebook.
 
 ## Run Experiments
 
