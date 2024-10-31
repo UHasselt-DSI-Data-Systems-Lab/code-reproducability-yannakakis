@@ -1,0 +1,1 @@
+Each benchmark has its own subfolder. Each subfolder contains a `run.sh` script that runs the all binary and 2NSA plans for that benchmark in Datafusion. Results can be analyzed using the `analysis.ipynb` notebook in each subfolder. 
