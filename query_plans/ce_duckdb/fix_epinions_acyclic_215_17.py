@@ -8,18 +8,23 @@ infiles = [
 ]
 
 for infile in infiles:
-    with open(infile, "r") as f:
+    try:
+        f = open(infile, "r")
         data = f.read()
 
-    data = data.replace(
-        '"extra_info": "INNER\\nepinions75902.s = epinions75902.s',
-        '"extra_info": "INNER\\nepinions75904.s = epinions75902.s',
-    )
+        data = data.replace(
+            '"extra_info": "INNER\\nepinions75902.s = epinions75902.s',
+            '"extra_info": "INNER\\nepinions75904.s = epinions75902.s',
+        )
 
-    data = data.replace(
-        '"extra_info": "INNER\\nepinions75902.s = epinions75891.s',
-        '"extra_info": "INNER\\nepinions75904.s = epinions75891.s',
-    )
+        data = data.replace(
+            '"extra_info": "INNER\\nepinions75902.s = epinions75891.s',
+            '"extra_info": "INNER\\nepinions75904.s = epinions75891.s',
+        )
 
-    with open(infile, "w") as f:
-        f.write(data)
+        with open(infile, "w") as f:
+            f.write(data)
+
+    except FileNotFoundError:
+        # Then there is nothing to fix.
+        pass

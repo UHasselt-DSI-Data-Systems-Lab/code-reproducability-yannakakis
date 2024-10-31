@@ -8,6 +8,10 @@
 
 QUERY_PLANS_FOLDER=$1
 
+curr_dir=$(pwd)
+visualize_py="$curr_dir"/query_graph.py
+
+
 cd "$QUERY_PLANS_FOLDER" || exit
 
 # For each folder
@@ -16,7 +20,7 @@ for dir in *; do
     # For each file in the folder
     for file in *; do
         # Convert JSON plan to HTML
-        python ./query_graph.py "$file" 
+        python "$visualize_py" "$file" 
     done
     cd ..
 done

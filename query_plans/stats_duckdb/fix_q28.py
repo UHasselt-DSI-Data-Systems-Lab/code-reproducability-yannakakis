@@ -7,13 +7,18 @@ infiles = [
 ]
 
 for infile in infiles:
-    with open(infile, "r") as f:
+    try:
+        f = open(infile, "r")
         data = f.read()
 
-    data = data.replace(
-        '"extra_info": "(u.Id >= 2)\\n[INFOSEPARATOR]\\n',
-        '"extra_info": "(p.OwnerUserId >= 2)\\n[INFOSEPARATOR]\\n',
-    )
+        data = data.replace(
+            '"extra_info": "(u.Id >= 2)\\n[INFOSEPARATOR]\\n',
+            '"extra_info": "(p.OwnerUserId >= 2)\\n[INFOSEPARATOR]\\n',
+        )
 
-    with open(infile, "w") as f:
-        f.write(data)
+        with open(infile, "w") as f:
+            f.write(data)
+
+    except FileNotFoundError:
+        # Then there is nothing to fix.
+        pass
