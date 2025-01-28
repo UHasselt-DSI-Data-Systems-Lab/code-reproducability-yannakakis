@@ -113,6 +113,14 @@ impl Field {
             field_name: self.field_name.to_lowercase(),
         }
     }
+
+    /// Returns a new Field with the table name and field name in lowercase.
+    pub fn lowercase_all(&self) -> Field {
+        Field {
+            table_name: self.table_name.as_ref().map(|t| t.to_lowercase()),
+            field_name: self.field_name.to_lowercase(),
+        }
+    }
 }
 
 // impl Field {

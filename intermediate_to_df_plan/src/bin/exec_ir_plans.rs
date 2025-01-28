@@ -164,6 +164,10 @@ async fn exec_plan(
     for rep in 0..repetitions {
         let plan = to_execution_plan(&path, catalog, false).await?;
 
+        // print execution plan
+        // let display_plan = displayable(plan.as_ref()).set_show_statistics(true);
+        // println!("{}", display_plan.indent(true));
+
         let (results, duration) = time_execution(plan.clone(), task_ctx.clone()).await?;
 
         println!("{}", pretty_format_batches(&results)?.to_string());

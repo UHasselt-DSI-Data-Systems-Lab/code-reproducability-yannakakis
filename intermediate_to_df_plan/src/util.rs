@@ -250,6 +250,7 @@ impl Catalog {
     /// Relation must be a table name or an alias.
     pub fn idx_of_field(&self, relation_or_alias: &str, field: &str) -> usize {
         let relation_or_alias = &relation_or_alias.to_lowercase();
+
         // Resolve alias first
         if self.alias_to_rel.contains_key(relation_or_alias) {
             let table_name = &self.alias_to_rel[relation_or_alias];
@@ -262,7 +263,7 @@ impl Catalog {
     /// Get the index of a field in a relation.
     /// Relation name must be the original name (not an alias).
     fn idx_of_field_helper(&self, relation: &str, field: &str) -> usize {
-        self.relations[relation]
+        self.relations[relation.to_lowercase().as_str()]
             .0
             .index_of(field.to_lowercase().as_str())
             .expect(&format!("Field {} not found", field))

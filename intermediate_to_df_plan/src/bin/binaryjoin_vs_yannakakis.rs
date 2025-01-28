@@ -198,17 +198,18 @@ async fn exec_query_once(
             outfolder,
         )
         .await?;
+        println!("{}", result);
         results.push(result);
     }
 
-    // assert_eq_results(results.as_slice());
-    if !check_eq_results(results.as_slice()) {
-        println!("Unequal results");
-        for result in results.iter() {
-            println!("{}", result);
-        }
-        return Ok(false);
-    }
+    assert_eq_results(results.as_slice());
+    // if !check_eq_results(results.as_slice()) {
+    //     println!("Unequal results");
+    //     for result in results.iter() {
+    //         println!("{}", result);
+    //     }
+    //     return Ok(false);
+    // }
 
     Ok(true)
 }
@@ -244,7 +245,6 @@ async fn exec_plan(
     let result = pretty_format_batches(&results)?.to_string();
 
     println! {"{}", extra_params.join(", ")}
-    println!("{}", result);
 
     write_timings(csv_wtr, &extra_params, duration)?;
 
@@ -361,19 +361,19 @@ fn find_json_files(dir: &Path) -> Vec<PathBuf> {
     json_files
 }
 
-// fn assert_eq_results(results: &[String]) {
-//     let first = &results[0];
-//     for result in results.iter().skip(1) {
-//         assert_eq!(first, result)
-//     }
-// }
-
-fn check_eq_results(results: &[String]) -> bool {
+fn assert_eq_results(results: &[String]) {
     let first = &results[0];
-    for result in results.iter().skip(1) {
-        if first != result {
-            return false;
-        }
+    for result in results.iter() {
+        assert_eq!(first, result)
     }
-    true
 }
+
+// fn check_eq_results(results: &[String]) -> bool {
+//     let first = &results[0];
+//     for result in results.iter() {
+//         if first != result {
+//             return false;
+//         }
+//     }
+//     true
+// }

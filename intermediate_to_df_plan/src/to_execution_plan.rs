@@ -26,6 +26,7 @@ use datafusion::{
         projection::ProjectionExec,
         AggregateExpr, ExecutionPlan, PhysicalExpr,
     },
+    prelude::Expr,
     sql::TableReference,
 };
 use regex::Regex;
@@ -33,7 +34,10 @@ use yannakakis_join_implementation::yannakakis::{
     flatten::Flatten, groupby::GroupBy, multisemijoin::MultiSemiJoin,
 };
 
-use crate::{intermediate_plan, util::Catalog};
+use crate::{
+    intermediate_plan::{self, SequentialScanNode},
+    util::Catalog,
+};
 
 #[async_trait]
 pub trait ToPhysicalNode {
@@ -188,10 +192,15 @@ impl ToPhysicalNode for intermediate_plan::ProjectionNode {
             .to_execution_plan(catalog, alternative_flatten)
             .await?;
 
+        let on = &self
+            .on
+            .iter()
+            .map(|f| f.lowercase_all())
+            .collect::<Vec<_>>();
+
         // Find the indices (and name) of the columns to project
         // Take qualified names into account!!!
-        let projection_idx = self
-            .on
+        let projection_idx = on
             .iter()
             .map(|f| {
                 // find position of field in the child schema
@@ -204,15 +213,6 @@ impl ToPhysicalNode for intermediate_plan::ProjectionNode {
                     ),
                     f,
                 )
-                // .map(|id| match id {
-                //     Some(id) => Ok((id, f.field_name.clone())),
-                //     None => Err(DataFusionError::Plan(format!(
-                //         "Projection attribute {:?}.{} not found, valid fields in child schema: {}",
-                //         f.table_name,
-                //         f.field_name,
-                //         input_dfschema.as_ref()
-                //     ))),
-                // })
             })
             .map(|x| match x {
                 (Ok(Some(id)), f) => Ok((id, f.field_name.clone())),
@@ -263,16 +263,18 @@ impl ToPhysicalNode for intermediate_plan::FilterNode {
             .to_execution_plan(catalog, alternative_flatten)
             .await?;
 
-        let input_schema = input.schema();
-        let condition = parse_where_clause(
+        let input_arrow_schema = input.schema();
+
+        let condition = where_clause_to_physical_expr(
             &self.condition,
             &input_dfschema,
-            input_schema.as_ref(),
+            input_arrow_schema.as_ref(),
             catalog,
         )
         .await?;
 
         let filter = FilterExec::try_new(condition, input)?;
+
         Ok((input_dfschema, Arc::new(filter)))
     }
 }
@@ -392,7 +394,7 @@ impl ToPhysicalNode for intermediate_plan::HashJoinNode {
         let join_condition = &self
             .condition
             .iter()
-            .map(|(l, r)| (l.to_lowercase(), r.to_lowercase()))
+            .map(|(l, r)| (l.lowercase_all(), r.lowercase_all()))
             .collect::<Vec<_>>();
         let on = parse_join_condition(
             join_condition, // join_condition is still in its original form, i.e., left = right
@@ -476,111 +478,201 @@ impl ToPhysicalNode for intermediate_plan::SequentialScanNode {
         catalog: &Catalog,
         _alternative_flatten: bool,
     ) -> Result<(DFSchemaRef, Arc<dyn ExecutionPlan>), DataFusionError> {
+        // seqscan_to_memoryexec(&self, catalog).await
+
         let relation = &self.relation.to_lowercase();
-        let data = catalog.get_data(&relation);
-        let schema = catalog.schemaof(&relation);
+        let arrow_schema_original = catalog.schemaof(&relation);
+
+        // 1) COMPUTE QUALIFIED OUTPUT SCHEMA
 
         // Indices of projection columns
         let mut projection_columns: Vec<usize> = Vec::with_capacity(self.projection.len());
 
-        // Check that the output schema is qualified.
-        // Also collect (table, field) pairs for the output schema
-        let output_schema = self
-            .projection
-            .iter()
-            .map(|f| match f.table_name.as_ref() {
-                Some(table) => Ok((table, &f.field_name)),
-                None => Err(DataFusionError::Plan(
-                    "Output schema of sequential scan node must be qualified.".to_string(),
-                )),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let df_output_schema_projected = DFSchema::new_with_metadata(
+            self.projection
+                .iter()
+                .map(|f| {
+                    let table = f
+                        .table_name
+                        .as_deref()
+                        .expect("Output schema of sequential scan node must be qualified.");
 
-        // For each (table, field) pair, get the column index
-        // Convert into DFSchema
-        let output_schema = output_schema
-            .into_iter()
-            .map(|(table, field)| {
-                let col_id = catalog.idx_of_field(table, field);
-                projection_columns.push(col_id);
-                DFField::from_qualified(TableReference::bare(table), schema.field(col_id).clone())
-            })
-            .collect::<Vec<_>>();
+                    let col_id = catalog.idx_of_field(table, &f.field_name);
+                    projection_columns.push(col_id);
+                    DFField::from_qualified(
+                        TableReference::bare(table),
+                        arrow_schema_original.field(col_id).clone(),
+                    )
+                })
+                .collect::<Vec<DFField>>(),
+            HashMap::new(),
+        )?;
 
-        match &self.opt_filter {
-            Some(filter) => {
-                // If there is a filter, we need to create a FilterExec node on top of the MemoryExec
-                // Because MemoryExec does not support filters
-                // Sometimes, the filter uses attributes that are not in the projection
-                // we solve these problems as follows:
-                //
-                // 1) create a memoryexec node that reads all columns
-                // 2) create a filterexec node on top of (1)
-                // 3) create a projectionexec node on top of (2)
+        // 2) CREATE EXECUTION PLAN NODE
 
-                // STEP 1: create a memoryexec node that reads all columns
-                let memexec: Arc<dyn ExecutionPlan> =
-                    Arc::new(MemoryExec::try_new(&[data.to_vec()], schema, None)?);
-                let tableref = output_schema[0].qualifier().unwrap();
-                let memexec_dfschema =
-                    DFSchema::try_from_qualified_schema(tableref, memexec.schema().as_ref())?;
+        let execplan = sequential_scan_to_parquetexec(self, catalog).await?;
 
-                // STEP 2: create a filterexec node on top of (1)
-                let condition = parse_where_clause(
-                    filter,
-                    &memexec_dfschema,
-                    memexec.schema().as_ref(),
-                    catalog,
-                )
-                .await?;
+        assert_eq!(
+            execplan.schema().fields().len(),
+            df_output_schema_projected.fields().len(),
+            "Computed output schema (DFSchema) not compatible with the actual output schema (ArrowSchema). DFSchema: {}, Schema: {}",
+            df_output_schema_projected,
+            execplan.schema()
+        );
 
-                let filter = Arc::new(FilterExec::try_new(condition, memexec)?);
+        return Ok((Arc::new(df_output_schema_projected), execplan));
+    }
+}
 
-                // STEP 3: create a projectionexec node on top of (2)
-                // Create physical expressions for the projections
-                let exprs = projection_columns
-                    .iter()
-                    .zip(output_schema.iter())
-                    .map(|(idx, field)| {
-                        let col: Arc<dyn PhysicalExpr> = Arc::new(Column::new(field.name(), *idx));
-                        (col, field.name().clone())
-                    })
-                    .collect::<Vec<_>>();
+async fn _seqscan_to_memoryexec(
+    seqscannode: &SequentialScanNode,
+    catalog: &Catalog,
+) -> Result<(DFSchemaRef, Arc<dyn ExecutionPlan>), DataFusionError> {
+    let relation = seqscannode.relation.to_lowercase();
+    let data = catalog.get_data(&relation);
+    let schema = catalog.schemaof(&relation);
 
-                let proj: Arc<dyn ExecutionPlan> =
-                    Arc::new(ProjectionExec::try_new(exprs, filter)?);
+    // Indices of projection columns
+    let mut projection_columns: Vec<usize> = Vec::with_capacity(seqscannode.projection.len());
 
-                return Ok((
-                    Arc::new(DFSchema::new_with_metadata(output_schema, HashMap::new())?),
-                    proj,
-                ));
-            }
-            None => {
-                // If there is no filter, we can directly create a MemoryExec node
-                let memoryexec = Arc::new(MemoryExec::try_new(
-                    &[data.to_vec()],
-                    schema,
-                    Some(projection_columns),
-                )?);
-                return Ok((
-                    Arc::new(DFSchema::new_with_metadata(output_schema, HashMap::new())?),
-                    memoryexec,
-                ));
-            }
+    // Check that the output schema is qualified.
+    // Also collect (table, field) pairs for the output schema
+    let output_schema = seqscannode
+        .projection
+        .iter()
+        .map(|f| match f.table_name.as_ref() {
+            Some(table) => Ok((table, &f.field_name)),
+            None => Err(DataFusionError::Plan(
+                "Output schema of sequential scan node must be qualified.".to_string(),
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // For each (table, field) pair, get the column index
+    // Convert into DFSchema
+    let output_schema = output_schema
+        .into_iter()
+        .map(|(table, field)| {
+            let col_id = catalog.idx_of_field(table, field);
+            projection_columns.push(col_id);
+            DFField::from_qualified(TableReference::bare(table), schema.field(col_id).clone())
+        })
+        .collect::<Vec<_>>();
+
+    match &seqscannode.opt_filter {
+        Some(filter) => {
+            // If there is a filter, we need to create a FilterExec node on top of the MemoryExec
+            // Because MemoryExec does not support filters
+            // Sometimes, the filter uses attributes that are not in the projection
+            // we solve these problems as follows:
+            //
+            // 1) create a memoryexec node that reads all columns
+            // 2) create a filterexec node on top of (1)
+            // 3) create a projectionexec node on top of (2)
+
+            // STEP 1: create a memoryexec node that reads all columns
+            let memexec: Arc<dyn ExecutionPlan> =
+                Arc::new(MemoryExec::try_new(&[data.to_vec()], schema, None)?);
+            let tableref = output_schema[0].qualifier().unwrap();
+            let memexec_dfschema =
+                DFSchema::try_from_qualified_schema(tableref, memexec.schema().as_ref())?;
+
+            // STEP 2: create a filterexec node on top of (1)
+            let condition = where_clause_to_physical_expr(
+                filter,
+                &memexec_dfschema,
+                memexec.schema().as_ref(),
+                catalog,
+            )
+            .await?;
+
+            let filter = Arc::new(FilterExec::try_new(condition, memexec)?);
+
+            // STEP 3: create a projectionexec node on top of (2)
+            // Create physical expressions for the projections
+            let exprs = projection_columns
+                .iter()
+                .zip(output_schema.iter())
+                .map(|(idx, field)| {
+                    let col: Arc<dyn PhysicalExpr> = Arc::new(Column::new(field.name(), *idx));
+                    (col, field.name().clone())
+                })
+                .collect::<Vec<_>>();
+
+            let proj: Arc<dyn ExecutionPlan> = Arc::new(ProjectionExec::try_new(exprs, filter)?);
+
+            return Ok((
+                Arc::new(DFSchema::new_with_metadata(output_schema, HashMap::new())?),
+                proj,
+            ));
+        }
+        None => {
+            // If there is no filter, we can directly create a MemoryExec node
+            let memoryexec = Arc::new(MemoryExec::try_new(
+                &[data.to_vec()],
+                schema,
+                Some(projection_columns),
+            )?);
+            return Ok((
+                Arc::new(DFSchema::new_with_metadata(output_schema, HashMap::new())?),
+                memoryexec,
+            ));
         }
     }
 }
 
-/// Parse a SQL WHERE clause into a physical expression.
-async fn parse_where_clause(
+/// Convert a [SequentialScanNode] to a physical [ExecutionPlan]
+/// that reads from a Parquet file.
+async fn sequential_scan_to_parquetexec(
+    node: &SequentialScanNode,
+    catalog: &Catalog,
+) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+    let relation = &node.relation.to_lowercase(); // full relation name
+
+    let projection = &node
+        .projection
+        .iter()
+        .map(|f| f.lowercase_all())
+        .collect::<Vec<_>>();
+
+    let projection_str = projection
+        .iter()
+        .map(|field| field.field_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let alias = projection[0]
+        .table_name
+        .as_ref()
+        .expect("Projection in SequentialScan must be qualified.");
+
+    let sql = match &node.opt_filter {
+        Some(filter) => {
+            format!(
+                "SELECT {} FROM {} as {} WHERE {}",
+                projection_str, relation, alias, filter
+            )
+        }
+        None => format!("SELECT {} FROM {} as {}", projection_str, relation, alias),
+    };
+
+    let state = catalog.get_state();
+    let plan = state.create_logical_plan(&sql).await?;
+
+    // Optimize plan and convert to physical plan
+    let plan = state.create_physical_plan(&plan).await?;
+
+    Ok(plan)
+}
+
+/// Parse a SQL WHERE clause into a logical filter expression.
+async fn where_clause_to_logical_expr(
     where_clause: &str,
     input_dfschema: &DFSchema,
-    input_schema: &Schema,
     catalog: &Catalog,
-) -> Result<Arc<dyn PhysicalExpr>, DataFusionError> {
+) -> Result<Expr, DataFusionError> {
     use datafusion::logical_expr::LogicalPlan::*;
 
-    // let where_clause = &where_clause.to_lowercase();
     let is_qualified = input_dfschema
         .fields()
         .iter()
@@ -619,18 +711,32 @@ async fn parse_where_clause(
     match optimized_plan {
         Projection(p) => match p.input.as_ref() {
             Filter(f) => {
-                let physical_expr = create_physical_expr(
-                    &f.predicate,
-                    input_dfschema,
-                    &input_schema,
-                    &ExecutionProps::new(),
-                );
-                return physical_expr;
+                return Ok(f.predicate.clone());
             }
             _ => todo!(),
         },
         _ => todo!(),
     }
+}
+
+/// Parse a SQL WHERE clause into a physical expression.
+/// `input_dfschema` and `input_schema` are the arrow and datafusion schemas of the input relation
+/// and must be compatible.
+async fn where_clause_to_physical_expr(
+    where_clause: &str,
+    input_dfschema: &DFSchema,
+    input_schema: &Schema,
+    catalog: &Catalog,
+) -> Result<Arc<dyn PhysicalExpr>, DataFusionError> {
+    assert_eq!(
+        input_dfschema.fields().len(),
+        input_schema.fields().len(),
+        "Mismatched schemas in where_clause_to_physical_expr. DFSchema: {}, Schema: {}",
+        input_dfschema,
+        input_schema
+    );
+    let expr = where_clause_to_logical_expr(where_clause, input_dfschema, catalog).await?;
+    create_physical_expr(&expr, input_dfschema, input_schema, &ExecutionProps::new())
 }
 
 fn aggr_fn(name: &str) -> datafusion::physical_plan::aggregates::AggregateFunction {
