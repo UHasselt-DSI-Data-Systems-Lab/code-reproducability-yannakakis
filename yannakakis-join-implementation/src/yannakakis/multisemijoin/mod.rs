@@ -20,6 +20,7 @@ use datafusion::physical_plan::ExecutionPlan;
 
 use crate::yannakakis::util::write_metrics_as_json;
 
+use super::data::GroupedRel;
 use super::data::GroupedRelRef;
 use super::data::Idx;
 use super::data::NestedBatch;
@@ -228,6 +229,7 @@ impl MultiSemiJoin {
             semijoin_keys,
             semijoin_metrics,
             hashes_buffer,
+            guard_batch_cache: None,
         }))
     }
 }
@@ -243,6 +245,16 @@ pub struct MultiSemiJoinStream {
     semijoin_keys: Vec<Vec<usize>>,
     semijoin_metrics: SemiJoinMetrics,
     hashes_buffer: Vec<u64>,
+
+    /// Cache for the guard batch, only used in the multi-semijoin case
+    ///
+    /// Useful in the following situation:
+    /// The first `x` children are materialized and the guard batch is probed.
+    /// This guard batch is successfully semijoined with the first `x` children and has a nonempty result.
+    /// We have to materialze the `x+1`th child. If that child is not ready yet,
+    /// the poll_next function will return Poll:Pending and the current guard batch and selection vector will be lost.
+    /// To avoid this, we cache them and use it in the next poll_next call.
+    guard_batch_cache: Option<RecordBatch>,
 }
 
 impl Stream for MultiSemiJoinStream {
@@ -256,83 +268,73 @@ impl Stream for MultiSemiJoinStream {
     }
 }
 
-impl MultiSemiJoinStream {
-    /// Separate implementation function that unpins the [`HashJoinStream`] so
-    /// that partial borrows work correctly
-    fn poll_next_impl(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Result<SemiJoinResultBatch, DataFusionError>>> {
-        let total_time = self.semijoin_metrics.total_time.timer();
-        let n_children = self.materialized_children_futs.len();
+/// poll_next_impl variant for MultiSemiJoinStream without children (i.e, leaf stream)
+#[inline(always)]
+fn poll_next_leaf(
+    guard_stream: &mut SendableRecordBatchStream,
+    semijoin_metrics: &SemiJoinMetrics,
+    cx: &mut std::task::Context<'_>,
+) -> Poll<Option<Result<SemiJoinResultBatch, DataFusionError>>> {
+    // Probe next guard input batch
+    // Returns early if:
+    // - the guard input batch is not yet available
+    // - the guard stream returned an error
+    let guard_batch = match ready!(guard_stream.poll_next_unpin(cx)) {
+        Some(Ok(guard_batch)) => guard_batch,
+        Some(Err(e)) => return Poll::Ready(Some(Err(e))),
+        None => return Poll::Ready(None),
+    };
 
-        // materialize the child groupby's (build sides), if not yet done
-        // if there are no children, this will return immediately
-        // let build_timer = self.semijoin_metrics.build_time.timer();
-        // let grouped_rels = match ready!(self.materialized_children_fut.get(cx)) {
-        //     Ok(grouped_rels) => grouped_rels,
-        //     Err(e) => return Poll::Ready(Some(Err(e))),
-        // };
-        // build_timer.done();
+    semijoin_metrics
+        .guard_input_rows
+        .add(guard_batch.num_rows());
 
-        // get next guard (probe) input batch, propagating any errors that we get from the guard stream
-        let guard_batch = match ready!(self.guard_stream.poll_next_unpin(cx)) {
-            Some(Ok(guard_batch)) => guard_batch,
-            Some(Err(e)) => return Poll::Ready(Some(Err(e))),
-            None => return Poll::Ready(None),
-        };
-
-        self.semijoin_metrics
-            .guard_input_rows
-            .add(guard_batch.num_rows());
-
-        let semijoin_time = self.semijoin_metrics.semijoin_time.timer();
-
-        let result = if n_children == 0 {
-            // Leaf stream
-            Poll::Ready(Some(Ok(SemiJoinResultBatch::Flat(guard_batch))))
-        } else if n_children == 1 {
-            // single child, materialize it and perform the semijoin
-            let child = &mut self.materialized_children_futs[0];
-            let grouped_rel = match ready!(child.get(cx)) {
-                Ok(grouped_rel) => grouped_rel,
-                Err(e) => return Poll::Ready(Some(Err(e))),
-            };
-
-            Poll::Ready(Some(Ok(SemiJoinResultBatch::Nested(single_semijoin(
-                guard_batch,
-                grouped_rel,
-                &self.semijoin_keys[0],
-                &mut self.hashes_buffer,
-                &self.schema,
-            )))))
-        } else {
-            // two or more children (we are not a leaf, so ...)
-            multi_semijoin(
-                guard_batch,
-                &mut self.materialized_children_futs,
-                &self.semijoin_keys,
-                &mut self.hashes_buffer,
-                &self.schema,
-                cx,
-            )
-        };
-
-        semijoin_time.done();
-        total_time.done();
-        result
-    }
+    // Return the guard batch as is
+    semijoin_metrics.output_rows.add(guard_batch.num_rows());
+    Poll::Ready(Some(Ok(SemiJoinResultBatch::Flat(guard_batch))))
 }
 
-/// Perform the actual semijoin between a guard batch and a single child groupby result.
-#[inline]
-fn single_semijoin(
-    guard_batch: RecordBatch,
-    grouped_rel: &GroupedRelRef,
+/// poll_next_impl variant for MultiSemiJoinStream with a single child
+/// (i.e., single semijoin)
+#[inline(always)]
+fn poll_next_single_semijoin(
+    guard_stream: &mut SendableRecordBatchStream,
+    child: &mut OnceFut<Arc<dyn GroupedRel>>,
     semijoin_on: &[usize],
     hashes_buffer: &mut Vec<u64>,
     schema: &NestedSchemaRef,
-) -> NestedBatch {
+    semijoin_metrics: &SemiJoinMetrics,
+    cx: &mut std::task::Context<'_>,
+) -> Poll<Option<Result<SemiJoinResultBatch, DataFusionError>>> {
+    // Get child (groupby) result, if available
+    // Return early if:
+    // - the child is not yet materialized (see the ready! macro)
+    // - the child is materialized, but returned an error
+    let grouped_rel = match ready!(child.get(cx)) {
+        Ok(grouped_rel) => grouped_rel,
+        Err(e) => {
+            return Poll::Ready(Some(Err(e)));
+        }
+    };
+
+    // At this point, the child groupby result is materialized and ready to be used for the semijoin
+    // So we can now probe the next guard input batch
+    // Returns early if:
+    // - the guard input batch is not yet available (see the ready! macro)
+    // - the guard stream returned an error
+    let guard_batch = match ready!(guard_stream.poll_next_unpin(cx)) {
+        Some(Ok(guard_batch)) => guard_batch,
+        Some(Err(e)) => return Poll::Ready(Some(Err(e))),
+        None => return Poll::Ready(None),
+    };
+
+    semijoin_metrics
+        .guard_input_rows
+        .add(guard_batch.num_rows());
+
+    // We have the guard batch and the child groupby result.
+    // so we can perform the actual semijoin operation.
+    let semijoin_time = semijoin_metrics.semijoin_time.timer();
     let mut keys: Vec<ArrayRef> = Vec::with_capacity(semijoin_on.len());
 
     create_keys(&guard_batch, semijoin_on, &mut keys);
@@ -343,28 +345,42 @@ fn single_semijoin(
     // - apply a take operation on the regular columns in the guard batch
     // Datafusion's take works only on UInt32Array, so we need to convert the selection vector to UInt32Array
     let sel = UInt32Array::from(sel.into_vec());
+
     let regular_cols: Vec<ArrayRef> = guard_batch
         .columns()
         .iter()
         .map(|col| datafusion::arrow::compute::take(col, &sel, None).unwrap())
         .collect();
 
-    NestedBatch::new(schema.clone(), regular_cols, vec![nested_col])
+    let nestedbatch = NestedBatch::new(schema.clone(), regular_cols, vec![nested_col]);
+
+    semijoin_time.done();
+    semijoin_metrics.output_rows.add(nestedbatch.num_rows());
+
+    Poll::Ready(Some(Ok(SemiJoinResultBatch::Nested(nestedbatch))))
 }
 
-/// Perform the actual semijoin between a guard batch and a list of 2 or more child groupby results.
+/// poll_next_impl variant for MultiSemiJoinStream with at least two children
+///
+/// Performs the actual semijoin between a guard batch and a list of 2 or more child groupby results.
 /// The children may not be materialized yet (hence the OnceFut). So we need to materialize them first if not yet done.
 /// Stop early: if an intermediate semijoin result is empty, do not semijoin with the remaining children (and also do not materialize them!)
 #[inline]
-fn multi_semijoin(
-    guard_batch: RecordBatch,
+fn poll_next_multi_semijoin(
+    guard_stream: &mut SendableRecordBatchStream,
     grouped_rels: &mut [OnceFut<GroupedRelRef>],
     semijoin_keys: &[Vec<usize>],
     hashes_buffer: &mut Vec<u64>,
     schema: &NestedSchemaRef,
     cx: &mut std::task::Context<'_>,
+    metrics: &SemiJoinMetrics,
+    guard_batch_cache: &mut Option<RecordBatch>,
 ) -> Poll<Option<Result<SemiJoinResultBatch, DataFusionError>>> {
-    assert!(grouped_rels.len() > 1);
+    assert!(
+        grouped_rels.len() >= 2,
+        "Expected >= 2 children for multisemijoin, found {}",
+        grouped_rels.len()
+    );
 
     // Create a vector to store the nested columns resulting from the semijoin.
     let mut nested_cols: Vec<NestedColumn> = Vec::with_capacity(grouped_rels.len());
@@ -372,12 +388,35 @@ fn multi_semijoin(
     // Create a vector to hold the lookup keys
     let mut keys: Vec<ArrayRef> = Vec::new();
 
-    // Allocate the selection vector. Initially, this contains all the rows.
+    if guard_batch_cache.is_none() {
+        // Poll next guard input batch
+        // Returns early if:
+        // - the guard input batch is not yet available
+        // - the guard stream returned an error
+        let guard_batch = match ready!(guard_stream.poll_next_unpin(cx)) {
+            Some(Ok(guard_batch)) => guard_batch,
+            Some(Err(e)) => return Poll::Ready(Some(Err(e))),
+            None => return Poll::Ready(None),
+        };
+
+        let input_rows = guard_batch.num_rows();
+        metrics.guard_input_rows.add(input_rows);
+
+        *guard_batch_cache = Some(guard_batch);
+    }
+
+    let guard_batch = guard_batch_cache.as_ref().unwrap();
+
+    // Initially, the selection vector contains all the rows.
     // It will be refined by lookup_sel to contain only the rows that are not dangling.
     let mut sel = Sel::all(guard_batch.num_rows() as Idx);
 
     for (grouped_rel_fut, semijoin_rel_on) in grouped_rels.iter_mut().zip(semijoin_keys.iter()) {
         // Compute grouped_rel if not yet done
+        // Returns early if:
+        // - the child is not yet materialized (see the ready! macro)
+        // - the child is materialized, but returned an error
+        // - the grouped_rel is empty
         let grouped_rel = match ready!(grouped_rel_fut.get(cx)) {
             Ok(grouped_rel) => {
                 if grouped_rel.is_empty() {
@@ -390,14 +429,22 @@ fn multi_semijoin(
             Err(e) => return Poll::Ready(Some(Err(e))),
         };
 
-        create_keys(&guard_batch, &semijoin_rel_on, &mut keys);
+        // Perform the semijoin operation with this child.
+        let semijoin_timer = metrics.semijoin_time.timer();
+        create_keys(guard_batch, &semijoin_rel_on, &mut keys);
         nested_cols.push(grouped_rel.lookup_sel(
             &keys,
             &mut sel,
             hashes_buffer,
             guard_batch.num_rows(),
         ));
+        semijoin_timer.done();
     }
+
+    // Empty the cache
+    let guard_batch = guard_batch_cache.take().unwrap();
+
+    let semijoin_timer = metrics.semijoin_time.timer();
 
     // We now have a final selection vector that contains the row numbers of the non-dangling tuples in the guard batch.
     // All of the regular columns, as well as all of the nested columns, have as many rows as the original `record_batch.num_rows()`
@@ -425,7 +472,52 @@ fn multi_semijoin(
         NestedBatch::new(schema.clone(), regular_cols, nested_cols)
     };
 
+    semijoin_timer.done();
+    metrics.output_rows.add(nestedbatch.num_rows());
+
     Poll::Ready(Some(Ok(SemiJoinResultBatch::Nested(nestedbatch))))
+}
+
+impl MultiSemiJoinStream {
+    /// Separate implementation function that unpins the [`HashJoinStream`] so
+    /// that partial borrows work correctly
+    fn poll_next_impl(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Result<SemiJoinResultBatch, DataFusionError>>> {
+        let total_time = self.semijoin_metrics.total_time.timer();
+        let n_children = self.materialized_children_futs.len();
+
+        let result = if n_children == 0 {
+            poll_next_leaf(&mut self.guard_stream, &self.semijoin_metrics, cx)
+        } else if n_children == 1 {
+            let child = &mut self.materialized_children_futs[0];
+            poll_next_single_semijoin(
+                &mut self.guard_stream,
+                child,
+                &self.semijoin_keys[0],
+                &mut self.hashes_buffer,
+                &self.schema,
+                &self.semijoin_metrics,
+                cx,
+            )
+        } else {
+            // two or more children (we are not a leaf, so ...)
+            poll_next_multi_semijoin(
+                &mut self.guard_stream,
+                &mut self.materialized_children_futs,
+                &self.semijoin_keys,
+                &mut self.hashes_buffer,
+                &self.schema,
+                cx,
+                &self.semijoin_metrics,
+                &mut self.guard_batch_cache,
+            )
+        };
+
+        total_time.done();
+        result
+    }
 }
 
 /// Create the keys for the semijoin operation.
