@@ -1,9 +1,9 @@
 #!/bin/bash
 
 root_dir="../.."
-parquet_data="$root_dir/benchmarks/stats-ceb/parquet-zstd"
-out_folder="./output" # non-existing output folder
-timings="timings.csv"
+parquet_data="$root_dir/benchmarks/stats-ceb/parquet-zstd-lowercase"
+out_folder="./output_revision" # non-existing output folder
+timings="timings_revision.csv"
 
 
 # make timings file
