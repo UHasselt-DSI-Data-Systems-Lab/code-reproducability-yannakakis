@@ -1,0 +1,1 @@
+select count(*) from yago25, yago8 yago8_1, yago8 yago8_2, yago0, yago2 where yago25.s = yago8_1.s and yago8_1.s = yago8_2.s and yago8_2.s = yago0.s and yago0.s = yago2.d;

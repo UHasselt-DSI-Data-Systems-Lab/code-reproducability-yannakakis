@@ -7,6 +7,10 @@
 -- \c db/job.db
 -- \i scripts/job/job_test
 
-\record results/benchmark_umbra_le.csv statsceb:
-\c db/statsceb.db
-\i scripts/statsceb/statsceb_all
+-- \record results/benchmark_umbra_le.csv statsceb:
+-- \c db/statsceb.db
+-- \i scripts/statsceb/statsceb_all
+
+\record results/benchmark_umbra_le.csv ce:
+\c db/ce.db
+\i scripts/ce/ce_all
