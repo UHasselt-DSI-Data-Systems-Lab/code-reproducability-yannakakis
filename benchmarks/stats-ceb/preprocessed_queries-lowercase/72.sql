@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, ph, v, b where p.id = c.postid and p.id = pl.relatedpostid and p.id = ph.postid and p.id = v.postid and b.userid = c.userid and c.score=0 and p.score<=67 and ph.posthistorytypeid=34 and b.date<='2014-08-20 12:16:56'::timestamp;

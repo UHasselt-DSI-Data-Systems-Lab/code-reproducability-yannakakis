@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, v, b, u where p.id = c.postid and p.id = pl.relatedpostid and p.id = v.postid and u.id = p.owneruserid and u.id = b.userid and c.score=2 and p.viewcount<=7710 and p.commentcount<=12 and p.favoritecount>=0 and p.favoritecount<=4 and p.creationdate>='2010-07-27 03:58:22'::timestamp and u.upvotes>=0;

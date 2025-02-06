@@ -1,0 +1,1 @@
+select count(*) from t, p, u, ph, b where p.id = t.excerptpostid and u.id = ph.userid and u.id = b.userid and u.id = p.owneruserid and p.commentcount>=0 and u.downvotes<=0 and b.date<='2014-08-22 02:21:55'::timestamp;

@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, ph, v, b where p.id = c.postid and p.id = pl.relatedpostid and p.id = ph.postid and p.id = v.postid and b.userid = c.userid and c.score=0 and p.score<=32 and p.viewcount<=4146 and pl.linktypeid=1 and v.creationdate<='2014-09-10 00:00:00'::timestamp;

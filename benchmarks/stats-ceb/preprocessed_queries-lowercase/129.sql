@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, ph, v where p.id = pl.postid and p.id = v.postid and p.id = ph.postid and p.id = c.postid and c.creationdate<='2014-09-10 02:42:35'::timestamp and p.score>=-1 and p.viewcount<=5896 and p.answercount>=0 and p.creationdate>='2010-07-29 15:57:21'::timestamp and v.votetypeid=2;

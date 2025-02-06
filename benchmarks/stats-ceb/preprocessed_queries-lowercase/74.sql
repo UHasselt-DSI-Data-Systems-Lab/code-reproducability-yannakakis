@@ -1,0 +1,1 @@
+select count(*) from c, p, ph, v, b, u where u.id = p.owneruserid and u.id = b.userid and p.id = c.postid and p.id = ph.postid and p.id = v.postid and p.posttypeid=1 and p.score<=192 and p.viewcount>=0 and p.viewcount<=2772 and p.answercount<=5 and u.downvotes>=0;

@@ -1,0 +1,1 @@
+select count(*) from c, p, ph, b, u where u.id = ph.userid and u.id = b.userid and u.id = p.owneruserid and u.id = c.userid and c.score=0 and p.posttypeid=1 and p.viewcount>=0 and p.viewcount<=4157 and p.favoritecount=0 and p.creationdate<='2014-09-08 09:58:16'::timestamp;

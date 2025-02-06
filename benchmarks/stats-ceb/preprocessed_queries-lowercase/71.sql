@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, ph, v, b where p.id = c.postid and p.id = pl.relatedpostid and p.id = ph.postid and p.id = v.postid and b.userid = c.userid and p.commentcount>=0 and ph.posthistorytypeid=2 and v.votetypeid=5;

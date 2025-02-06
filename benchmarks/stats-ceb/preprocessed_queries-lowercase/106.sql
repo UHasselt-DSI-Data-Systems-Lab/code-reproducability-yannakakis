@@ -1,0 +1,1 @@
+select count(*) from c, ph, v, u where v.userid = u.id and c.userid = u.id and ph.userid = u.id and c.creationdate<='2014-08-28 07:25:55'::timestamp and ph.posthistorytypeid=2 and u.reputation>=1 and u.views>=0 and u.downvotes>=0 and u.upvotes>=0 and u.upvotes<=15 and u.creationdate>='2010-09-03 11:45:16'::timestamp and u.creationdate<='2014-08-18 17:19:53'::timestamp;

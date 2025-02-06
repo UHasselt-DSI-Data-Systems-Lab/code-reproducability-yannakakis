@@ -7,7 +7,9 @@ test_parquet_reader.test
 
 # Ignore datasets
 benchmarks/*/data
+benchmarks/*/data-lowercase
 benchmarks/*/parquet-zstd
+benchmarks/*/parquet-zstd-lowercase
 
 # Ignore .dat files generated during analysis
 **/*.dat
