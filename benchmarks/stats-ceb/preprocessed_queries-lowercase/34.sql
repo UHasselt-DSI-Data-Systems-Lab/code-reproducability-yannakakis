@@ -1,0 +1,1 @@
+select count(*) from c, v, b, u where u.id = c.userid and u.id = v.userid and u.id = b.userid and c.score=1 and c.creationdate>='2010-07-20 23:17:28'::timestamp and u.creationdate>='2010-07-20 01:27:29'::timestamp;

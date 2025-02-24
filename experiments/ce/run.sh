@@ -2,8 +2,8 @@
 
 root_dir="../.."
 parquet_data="$root_dir/benchmarks/ce/parquet-zstd"
-out_folder="./output" # non-existing output folder
-timings="timings.csv"
+out_folder="./output_revision" # non-existing output folder
+timings="timings_revision.csv"
 
 
 # make timings file

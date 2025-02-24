@@ -1,0 +1,1 @@
+select count(*) from c, pl, p, u, b where p.id = pl.relatedpostid and p.id = c.postid and u.id = b.userid and u.id = p.owneruserid and c.creationdate<='2014-09-08 15:58:08'::timestamp and p.viewcount>=0 and u.reputation>=1;

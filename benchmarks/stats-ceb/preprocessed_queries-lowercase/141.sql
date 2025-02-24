@@ -1,0 +1,1 @@
+select count(*) from c, p, pl, ph, v, b, u where p.id = pl.relatedpostid and b.userid = u.id and c.userid = u.id and p.id = v.postid and p.id = c.postid and p.id = ph.postid and p.score<=40 and p.commentcount>=0 and p.creationdate>='2010-07-28 17:40:56'::timestamp and p.creationdate<='2014-09-11 04:22:44'::timestamp and pl.linktypeid=1;

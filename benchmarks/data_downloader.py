@@ -8,7 +8,7 @@ root_folder_drive = "https://drive.google.com/drive/folders/14DtUb0uVMmiHpWvLZaU
 datasets = {
     "imdb": ["data", "parquet-zstd"],
     "ce": ["data", "parquet-zstd"],
-    "stats-ceb": ["data", "parquet-zstd"],
+    "stats-ceb": ["data", "data-lowercase", "parquet-zstd", "parquet-zstd-lowercase"],
 }
 
 cache_dir = ".data_cache"

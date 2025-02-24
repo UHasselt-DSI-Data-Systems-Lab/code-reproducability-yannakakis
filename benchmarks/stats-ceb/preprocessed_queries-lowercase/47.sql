@@ -1,0 +1,1 @@
+select count(*) from c, p, ph, v, u where u.id = c.userid and c.userid = p.owneruserid and p.owneruserid = ph.userid and ph.userid = v.userid and p.score<=13 and p.answercount>=0 and p.answercount<=4 and p.commentcount>=0 and p.favoritecount<=2 and ph.posthistorytypeid=3 and v.bountyamount<=50 and u.downvotes>=0;

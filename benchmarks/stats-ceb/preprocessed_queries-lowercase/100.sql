@@ -1,0 +1,1 @@
+select count(*) from c, p, v, u where u.id = p.owneruserid and p.id = v.postid and p.id = c.postid and p.score>=0 and p.score<=16 and p.viewcount>=0 and p.creationdate<='2014-09-09 12:00:50'::timestamp and u.reputation>=1 and u.creationdate>='2010-07-19 19:08:49'::timestamp and u.creationdate<='2014-08-28 12:15:56'::timestamp;

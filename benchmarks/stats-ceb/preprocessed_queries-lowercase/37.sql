@@ -1,0 +1,1 @@
+select count(*) from c, pl, ph, v where pl.postid = c.postid and c.postid = ph.postid and ph.postid = v.postid and ph.creationdate>='2011-05-07 21:47:19'::timestamp and ph.creationdate<='2014-09-10 13:19:54'::timestamp;

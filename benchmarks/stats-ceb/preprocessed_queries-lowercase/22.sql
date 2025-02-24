@@ -1,0 +1,1 @@
+select count(*) from v, p, u where v.userid = p.owneruserid and p.owneruserid = u.id and p.commentcount>=0 and p.commentcount<=12 and u.creationdate>='2010-07-22 04:38:06'::timestamp and u.creationdate<='2014-09-08 15:55:02'::timestamp;

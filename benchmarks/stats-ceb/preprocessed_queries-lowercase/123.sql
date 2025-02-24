@@ -1,0 +1,1 @@
+select count(*) from ph, p, u, b where b.userid = u.id and p.owneruserid = u.id and ph.userid = u.id and p.answercount>=0 and p.favoritecount>=0 and p.creationdate<='2014-09-03 03:32:35'::timestamp and u.creationdate<='2014-09-12 22:21:49'::timestamp;

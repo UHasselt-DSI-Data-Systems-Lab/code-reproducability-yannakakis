@@ -1,0 +1,1 @@
+select count(*) from imdb100, imdb42, imdb11 where imdb100.d = imdb42.s and imdb42.s = imdb11.s;

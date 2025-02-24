@@ -1,0 +1,1 @@
+select count(*) from v, p, b, u where u.id = v.userid and u.id = p.owneruserid and u.id = b.userid and v.creationdate<='2014-09-06 00:00:00'::timestamp and p.score<=48 and p.answercount<=8 and b.date>='2011-01-03 20:50:19'::timestamp and b.date<='2014-09-02 15:35:07'::timestamp and u.creationdate>='2010-11-16 06:03:04'::timestamp;

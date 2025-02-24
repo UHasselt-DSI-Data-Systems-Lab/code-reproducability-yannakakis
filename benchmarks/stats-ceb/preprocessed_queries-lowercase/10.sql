@@ -1,0 +1,1 @@
+select count(*) from c, p, u where c.userid = u.id and u.id = p.owneruserid and c.creationdate>='2010-08-05 00:36:02'::timestamp and c.creationdate<='2014-09-08 16:50:49'::timestamp and p.viewcount>=0 and p.viewcount<=2897 and p.commentcount>=0 and p.commentcount<=16 and p.favoritecount>=0 and p.favoritecount<=10;

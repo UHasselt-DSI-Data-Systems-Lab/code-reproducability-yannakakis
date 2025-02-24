@@ -7,13 +7,16 @@ test_parquet_reader.test
 
 # Ignore datasets
 benchmarks/*/data
+benchmarks/*/data-lowercase
 benchmarks/*/parquet-zstd
+benchmarks/*/parquet-zstd-lowercase
 
 # Ignore .dat files generated during analysis
 **/*.dat
 
 # Ignore output of CE benchmark
 experiments/ce/output
+experiments/ce/output_revision
 
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,jupyternotebooks,rust,rust-analyzer
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,python,jupyternotebooks,rust,rust-analyzer

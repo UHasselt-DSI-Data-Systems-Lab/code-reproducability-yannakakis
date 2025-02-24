@@ -1,0 +1,1 @@
+select count(*) from v, p, b, u where u.id = b.userid and u.id = p.owneruserid and p.id = v.postid and p.answercount>=0 and p.answercount<=7 and p.creationdate<='2014-09-12 00:03:32'::timestamp and b.date<='2014-09-11 07:27:36'::timestamp;
