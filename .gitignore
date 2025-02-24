@@ -16,6 +16,7 @@ benchmarks/*/parquet-zstd-lowercase
 
 # Ignore output of CE benchmark
 experiments/ce/output
+experiments/ce/output_revision
 
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,jupyternotebooks,rust,rust-analyzer
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,python,jupyternotebooks,rust,rust-analyzer
