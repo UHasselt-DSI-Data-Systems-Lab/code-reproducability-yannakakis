@@ -13,7 +13,7 @@ The repository is organized as follows:
 - [**yannakakis-join-implementation**](./yannakakis-join-implementation/): Yannakakis implementation in Datafusion. (dependency of [intermediate_to_df_plan](./intermediate_to_df_plan/))
 
 
-Do not forget to clone submodules well when cloning this repository. You can do this by adding the `--recursive` flag to the `git clone` command:
+Do not forget to clone submodules as well when cloning this repository. You can do this by adding the `--recursive` flag to the `git clone` command:
 
 ```bash
 git clone --recursive <URL>
