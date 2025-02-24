@@ -55,4 +55,4 @@ chmod +x run_queries.sh
 ./run_queries.sh
 ```
 
-You can now run, for each benchmark, the notebook `experiments/<benchmark>/analysis.ipynb` to analyze the results.
+You can now run, for each benchmark, the notebooks `experiments/<benchmark>/aggregate_data.ipynb` and `experiments/<benchmark>/analysis.ipynb` to analyze the results.
