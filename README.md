@@ -33,7 +33,7 @@ Be aware that results might differ from machine to machine. We conducted all exp
 - Make (4.3) & Ninja (1.10.1)
 
 
-We provided some bash script to make it easier to run the experiments: [setup.sh](./setup.sh), [clean.sh](./clean.sh), and [run_queries.sh](./run_queries.sh). They should be executed from the root directory and also in the following order:
+We provided some bash scripts to make it easier to run the experiments: [setup.sh](./setup.sh), [clean.sh](./clean.sh), and [run_queries.sh](./run_queries.sh). They should be executed from the root directory and also in the following order:
 
 ```bash
 # cwd = root directory of this repository
@@ -50,9 +50,14 @@ chmod +x setup.sh
 chmod +x clean.sh
 ./clean.sh
 
-# Run all benchmark queries (DuckDB-bin, Datafusion-bin, Datafusion-2NSA)
+# Run all benchmark queries (DuckDB-bin, DF-Bin, SYA)
 chmod +x run_queries.sh
 ./run_queries.sh
+
+# Run queries in Umbra
+cd umbra
+chmod +x ./runall.sh
+./runall.sh
 ```
 
 You can now run, for each benchmark, the notebooks `experiments/<benchmark>/aggregate_data.ipynb` and `experiments/<benchmark>/analysis.ipynb` to analyze the results.
