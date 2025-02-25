@@ -1,4 +1,4 @@
 /data
 /db
-/docker
+/docker/*.tar.gz
 *.7z

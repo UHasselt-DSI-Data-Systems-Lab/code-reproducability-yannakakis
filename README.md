@@ -56,6 +56,7 @@ chmod +x run_queries.sh
 
 # Run queries in Umbra
 cd umbra
+# Follow the instructions in the README.md of the umbra folder, and then:
 chmod +x ./runall.sh
 ./runall.sh
 ```
