@@ -34,3 +34,6 @@ to_ir () {
 infolder="./3_no_filters_and_projections"
 outfolder="./3_IR_no_filters_and_projections"
 to_ir $infolder $outfolder
+
+# fix query 17a, 17b, 17c
+python ./fix_17.py
