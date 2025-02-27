@@ -19,5 +19,12 @@ done
 for benchmark in imdb statsceb ce
 do
     rm -f  "$root"/experiments/"$benchmark"/timings.csv
+    rm -f  "$root"/experiments/"$benchmark"/timings_agg.csv
+    rm -f  "$root"/experiments/"$benchmark"/timings_revision.csv
+    rm -f  "$root"/experiments/"$benchmark"/timings_agg_revision.csv
     rm -rf "$root"/experiments/"$benchmark"/output
+    rm -rf "$root"/experiments/"$benchmark"/output_revision
+
 done
+
+rm -f "$root"/umbra/results/*.csv
